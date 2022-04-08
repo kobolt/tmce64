@@ -6,101 +6,50 @@
 #include <signal.h>
 #include <stdarg.h>
 
-#include <termios.h>
 #include <unistd.h>
+#include <sys/time.h>
+#include <limits.h>
 
-#include "cpu.h"
+#include "mos6510.h"
+#include "mos6510_trace.h"
 #include "mem.h"
+#include "cia.h"
 #include "panic.h"
+#include "console.h"
+#include "debugger.h"
 #include "test.h"
 
 
 
-#define KERNAL_ROM "/usr/lib64/vice/C64/kernal"
-#define BASIC_ROM "/usr/lib64/vice/C64/basic"
-#define CHAR_ROM "/usr/lib64/vice/C64/chargen"
+#define DEFAULT_ROM_DIRECTORY "/usr/lib64/vice/C64/"
+#define KERNAL_ROM "kernal"
+#define BASIC_ROM "basic"
+#define CHAR_ROM "chargen"
 
 
 
-static uint8_t screencode_to_ascii[UINT8_MAX + 1] = {
-  '@','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O',
-  'P','Q','R','S','T','U','V','W','X','Y','Z','[','&',']','.','.',
-  ' ','!','"','#','$','%','&','\'','(',')','*','+',',','-','.','/',
-  '0','1','2','3','4','5','6','7','8','9',':',';','<','=','>','?',
-  '.','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O',
-  'P','Q','R','S','T','U','V','W','X','Y','Z','.','.','.','.','.',
-  '.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.',
-  '.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.',
-  '@','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O',
-  'P','Q','R','S','T','U','V','W','X','Y','Z','[','&',']','.','.',
-  ' ','!','"','#','$','%','&','\'','(',')','*','+',',','-','.','/',
-  '0','1','2','3','4','5','6','7','8','9',':',';','<','=','>','?',
-  '.','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O',
-  'P','Q','R','S','T','U','V','W','X','Y','Z','.','.','.','.','.',
-  '.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.',
-  '.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.',
-};
+static mos6510_t cpu;
+static mem_t mem;
+static cia_t cia1;
+static cia_t cia2;
 
-
-
-static uint8_t key_to_petscii[UINT8_MAX + 1] = {
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,'\r', 0,  0,  0,  0,  0,
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-  ' ','!','"','#','$','%','&',  0,'(',')','*','+',',','-','.','/',
-  '0','1','2','3','4','5','6','7','8','9',':',';','<','=','>','?',
-  '@','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O',
-  'P','Q','R','S','T','U','V','W','X','Y','Z','[',  0,']',  0,  0,
-    0,'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O',
-  'P','Q','R','S','T','U','V','W','X','Y','Z',  0,  0,  0,  0,  0,
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-};
-
-
-
-static cpu_t main_cpu;
-static mem_t main_mem;
-
-static bool print_ready = false;
-
-
-
-static void crash_dump(void)
-{ 
-  fprintf(stderr, "Stack:\n");
-  mem_ram_dump(stderr, &main_mem, MEM_PAGE_STACK, MEM_PAGE_STACK + 0xFF);
-  
-  fprintf(stderr, "Zero Page:\n");
-  mem_ram_dump(stderr, &main_mem, 0, 0xFF);
-  
-  fprintf(stderr, "CPU Trace:\n");
-  cpu_trace_dump(stderr);
-}
+bool debugger_break = false;
+bool warp_mode = false;
+static char panic_msg[80];
+static char *pending_prg = NULL;
 
 
 
 static void sig_handler(int sig)
 {
-  fprintf(stderr, "Aborted!\n");
-  crash_dump();
-  exit(1);
-}
+  switch (sig) {
+  case SIGALRM:
+    return; /* Ignore */
 
-
-
-static void exit_handler(void)
-{
-  /* Restore canonical mode and echo. */
-  struct termios ts;
-  tcgetattr(STDIN_FILENO, &ts);
-  ts.c_lflag |= ICANON | ECHO;
-  tcsetattr(STDIN_FILENO, TCSANOW, &ts);
+  case SIGINT:
+    debugger_break = true;
+    return;
+  }
 }
 
 
@@ -110,120 +59,201 @@ void panic(const char *format, ...)
   va_list args;
 
   va_start(args, format);
-  vfprintf(stderr, format, args);
+  vsnprintf(panic_msg, sizeof(panic_msg), format, args);
   va_end(args);
 
-  crash_dump();
-  exit(1);
+  debugger_break = true;
 }
 
 
 
-bool ram_read(mem_t *mem, uint16_t address, uint8_t *value)
+static void display_help(const char *progname)
 {
-  static int dummy_reads = 2;
-  uint8_t petscii;
-  int c;
-
-  /* $00C6 = Length of keyboard buffer */
-  if (address == 0xC6) {
-    if (! print_ready) {
-      *value = 0;
-      return true;
-    }
-
-    dummy_reads++;
-    if (dummy_reads <= 3) {
-      *value = 1;
-      return true;
-    }
-    dummy_reads = 0;
-
-    /* This is a blocking read so the CPU will not spin at 100% */
-    c = fgetc(stdin);
-    if (c == EOF) {
-      exit(0);
-    } else {
-      petscii = key_to_petscii[c];
-      if (petscii != 0) {
-        /* $0277 = Keyboard buffer, first entry */
-        mem->ram[0x277] = petscii;
-        *value = 1;
-        return true;
-      } else {
-        dummy_reads = 2;
-      }
-    }
-  }
-  return false;
-}
-
-
-
-bool ram_write(mem_t *mem, uint16_t address, uint8_t value)
-{
-  static uint8_t last_cursor_row = 0;
-
-  /* $00D6 = Current cursor row */
-  if (address == 0xD6) {
-    if (value != last_cursor_row) {
-      printf("\n");
-    }
-    last_cursor_row = value;
-  }
-
-  /* $0400-$07E8 = Screen memory area */
-  if (address >= 0x400 && address <= 0x7E8) {
-    /* Waiting for the star to appear to avoid printing lots of garbage. */
-    if ((! print_ready) && (value == '*')) {
-      print_ready = true;
-      printf("    ");
-    }
-    if (print_ready) {
-      printf("%c", screencode_to_ascii[value]);
-    }
-  }
-
-  return false;
+  fprintf(stdout, "Usage: %s <options> [prg]\n", progname);
+  fprintf(stdout, "Options:\n"
+     "  -h       Display this help.\n"
+     "  -b       Break into debugger on start.\n"
+     "  -w       Warp mode, disable real C64 speed emulation.\n"
+     "  -r DIR   Load ROM file from DIR instead of default location.\n"
+     "  -l       Run Lorenz CPU test.\n"
+     "  -t       Run Dormann CPU test.\n"
+     "\n");
+  fprintf(stdout,
+    "Specify a PRG file to load it automatically on start.\n"
+    "Using Ctrl+C will break into debugger, use 'q' from there to quit.\n"
+    "\n");
 }
 
 
 
 int main(int argc, char *argv[])
 {
-  cpu_trace_init();
+  int c;
+  bool dormann_test = false;
+  bool lorenz_test = false;
+  char *rom_directory = NULL;
+  char rom_path[PATH_MAX];
+  int cycle = 0;
+
+  while ((c = getopt(argc, argv, "hbdlr:w")) != -1) {
+    switch (c) {
+    case 'h':
+      display_help(argv[0]);
+      return EXIT_SUCCESS;
+
+    case 'b':
+      debugger_break = true;
+      break;
+
+    case 'd':
+      dormann_test = true;
+      break;
+
+    case 'l':
+      lorenz_test = true;
+      break;
+
+    case 'r':
+      rom_directory = optarg;
+      break;
+
+    case 'w':
+      warp_mode = true;
+      break;
+
+    case '?':
+    default:
+      display_help(argv[0]);
+      return EXIT_FAILURE;
+    }
+  }
+
+  mos6510_trace_init();
+  panic_msg[0] = '\0';
+
+  mem_init(&mem);
+  cia_init(&cia1, 1);
+  cia_init(&cia2, 2);
+
+  /* Lorenz test mode: */
+  if (lorenz_test) {
+    lorenz_test_setup(&cpu, &mem);
+    while (1) {
+      mos6510_trace_add(&cpu, &mem);
+      mos6510_execute(&cpu, &mem);
+    }
+    return EXIT_SUCCESS;
+
+  /* Dormann test mode: */
+  } else if (dormann_test) {
+    dormann_test_setup(&cpu, &mem);
+    while (1) {
+      mos6510_trace_add(&cpu, &mem);
+      mos6510_execute(&cpu, &mem);
+    }
+    return EXIT_SUCCESS;
+  }
+
+  /* Commodore 64 mode: */
+  snprintf(rom_path, PATH_MAX, "%s/%s",
+    (rom_directory) ? rom_directory : DEFAULT_ROM_DIRECTORY, KERNAL_ROM);
+  if (mem_load_rom(&mem, rom_path, 0xE000) != 0) {
+    fprintf(stdout, "Loading of ROM '%s' failed!\n", rom_path);
+    return EXIT_FAILURE;
+  }
+
+  snprintf(rom_path, PATH_MAX, "%s/%s",
+    (rom_directory) ? rom_directory : DEFAULT_ROM_DIRECTORY, BASIC_ROM);
+  if (mem_load_rom(&mem, rom_path, 0xA000) != 0) {
+    fprintf(stdout, "Loading of ROM '%s' failed!\n", rom_path);
+    return EXIT_FAILURE;
+  }
+
+  snprintf(rom_path, PATH_MAX, "%s/%s",
+    (rom_directory) ? rom_directory : DEFAULT_ROM_DIRECTORY, CHAR_ROM);
+  if (mem_load_rom(&mem, rom_path, 0xD000) != 0) {
+    fprintf(stdout, "Loading of ROM '%s' failed!\n", rom_path);
+    return EXIT_FAILURE;
+  }
+
+  /* Setup CIA connections: */
+  mem.cia_read = cia_read_hook;
+  mem.cia_write = cia_write_hook;
+  mem.cia1 = &cia1;
+  mem.cia2 = &cia2;
+  cia1.cpu = &cpu;
+  cia1.mem = &mem;
+  cia2.cpu = &cpu;
+  cia2.mem = &mem;
+
+  mos6510_reset(&cpu, &mem);
+  console_init();
   signal(SIGINT, sig_handler);
-  atexit(exit_handler);
 
-  mem_init(&main_mem);
+  /* Autoload PRG if specified. */
+  if (argc > optind) {
+    pending_prg = argv[optind];
+  }
 
-  if (argc > 1 && (0 == strcmp("lorenz", argv[1]))) {
-    lorenz_test_setup(&main_cpu, &main_mem);
-
-  } else if (argc > 1 && (0 == strcmp("dormann", argv[1]))) {
-    dormann_test_setup(&main_cpu, &main_mem);
-
-  } else {
-    mem_load_rom(&main_mem, KERNAL_ROM, 0xE000);
-    mem_load_rom(&main_mem, BASIC_ROM, 0xA000);
-    mem_load_rom(&main_mem, CHAR_ROM, 0xD000);
-    cpu_reset(&main_cpu, &main_mem);
-    mem_ram_read_hook_install(ram_read);
-    mem_ram_write_hook_install(ram_write);
-
-    /* Turn off canonical mode and echo. */
-    struct termios ts;
-    tcgetattr(STDIN_FILENO, &ts);
-    ts.c_lflag &= ~ICANON & ~ECHO;
-    tcsetattr(STDIN_FILENO, TCSANOW, &ts);
+  /* Setup timer to relax CPU. */
+  if (! warp_mode) {
+    struct itimerval new;
+    new.it_value.tv_sec = 0;
+    new.it_value.tv_usec = 10000;
+    new.it_interval.tv_sec = 0;
+    new.it_interval.tv_usec = 10000;
+    signal(SIGALRM, sig_handler);
+    setitimer(ITIMER_REAL, &new, NULL);
   }
 
   while (1) {
-    cpu_trace_add(&main_cpu, &main_mem);
-    cpu_execute(&main_cpu, &main_mem);
+    mos6510_trace_add(&cpu, &mem);
+    mos6510_execute(&cpu, &mem);
+    cia_execute(&cia1);
+    cia_execute(&cia2);
+    console_execute(&mem);
+
+    if (debugger_break) {
+      console_pause();
+      if (panic_msg[0] != '\0') {
+        fprintf(stdout, "%s", panic_msg);
+        panic_msg[0] = '\0';
+      }
+      debugger_break = debugger(&cpu, &mem);
+      if (! debugger_break) {
+        console_resume();
+      }
+    }
+
+    cycle++;
+    if (pending_prg != NULL) {
+      if (cycle > 600000) {
+        if (mem_load_prg(&mem, pending_prg) != 0) {
+          console_exit();
+          fprintf(stdout, "Loading of PRG '%s' failed!\n", pending_prg);
+          return EXIT_FAILURE;
+        }
+
+        /* Inject a RUN command. */
+        mem.ram[0x277] = 'R';
+        mem.ram[0x278] = 'U';
+        mem.ram[0x279] = 'N';
+        mem.ram[0x27A] = '\r';
+        mem.ram[0x27B] = '\r';
+        mem.ram[0xC6] = 5;
+
+        pending_prg = NULL;
+      }
+
+    } else if (! warp_mode) {
+      if (cycle > 3000) { /* Tuned to approximately real C64 speed. */
+        cycle = 0;
+        pause(); /* Wait for SIGALRM. */
+      }
+    }
   }
 
-  return 0;
+  return EXIT_SUCCESS;
 }
 
 

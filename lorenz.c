@@ -5,7 +5,7 @@
 #include <stdbool.h>
 
 #include "test.h"
-#include "cpu.h"
+#include "mos6510.h"
 #include "mem.h"
 
 
@@ -39,7 +39,7 @@ static void lorenz_test_load(mem_t *mem, const char *filename)
   char path[256];
   
   if (0 == strcmp("trap17", filename)) {
-    exit(0);
+    exit(EXIT_SUCCESS);
   }
   
   snprintf(path, sizeof(path), "%s/%s", LORENZ_TEST_DIRECTORY, filename);
@@ -47,7 +47,7 @@ static void lorenz_test_load(mem_t *mem, const char *filename)
   fh = fopen(path, "rb");
   if (fh == NULL) { 
     fprintf(stderr, "Error! Lorenz test file not found: '%s'\n", filename);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   
   address  = fgetc(fh);
@@ -63,7 +63,8 @@ static void lorenz_test_load(mem_t *mem, const char *filename)
 
 
 
-static bool lorenz_test_opcode_handler(uint32_t opcode, cpu_t *cpu, mem_t *mem)
+static bool lorenz_test_opcode_handler(uint32_t opcode,
+  mos6510_t *cpu, mem_t *mem)
 {
   uint8_t immediate;
   uint16_t absolute;
@@ -105,12 +106,12 @@ static bool lorenz_test_opcode_handler(uint32_t opcode, cpu_t *cpu, mem_t *mem)
     case 0x8000:
     case 0xA474:
       fprintf(stderr, "Exit");
-      exit(0);
+      exit(EXIT_SUCCESS);
       break;
 
     default:
       fprintf(stderr, "Error! Unhandled trap: %04X\n", cpu->pc-1);
-      exit(1);
+      exit(EXIT_FAILURE);
       break;
     }
     return true;
@@ -122,10 +123,10 @@ static bool lorenz_test_opcode_handler(uint32_t opcode, cpu_t *cpu, mem_t *mem)
  
 
 
-void lorenz_test_setup(cpu_t *cpu, mem_t *mem)
+void lorenz_test_setup(mos6510_t *cpu, mem_t *mem)
 { 
   /* Inject trap opcode */
-  cpu_trap_opcode(0xFF, lorenz_test_opcode_handler);
+  mos6510_trap_opcode(0xFF, lorenz_test_opcode_handler);
   
   /* Disable bank switching */
   mem->ram[1] = 0x0;
