@@ -76,7 +76,7 @@ static void display_help(const char *progname)
      "  -w       Warp mode, disable real C64 speed emulation.\n"
      "  -r DIR   Load ROM file from DIR instead of default location.\n"
      "  -l       Run Lorenz CPU test.\n"
-     "  -t       Run Dormann CPU test.\n"
+     "  -d       Run Dormann CPU test.\n"
      "\n");
   fprintf(stdout,
     "Specify a PRG file to load it automatically on start.\n"

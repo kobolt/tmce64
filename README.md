@@ -14,3 +14,5 @@ Some features:
 * Most BASIC programs should work, machine code programs are hit-and-miss.
 * Needs the ROMs from the [VICE emulator](https://vice-emu.sourceforge.io/).
 
+![Commodre 64 BASIC](tmce64-basic.png)
+
