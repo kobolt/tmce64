@@ -9,6 +9,7 @@
 #include <sys/time.h>
 
 #include "mem.h"
+#include "cia.h"
 #include "panic.h"
 
 /* Using colors from the default rxvt color palette. */
@@ -147,8 +148,13 @@ void console_execute(mem_t *mem)
   /* Output */
   for (row = 0; row < 25; row++) {
     for (col = 0; col < 40; col++) {
-      /* $0400-$07E8 = Screen memory area. */
-      address = 0x400 + col + (row * 40);
+      /* Start with the VIC-II bank selection... */
+      address = ((~(((cia_t *)mem->cia2)->data_port_a) & 0x3) * 0x4000);
+      /* ...Then add the screen memory area offset... */
+      address += ((mem->vic2_mp >> 4) & 0xF) * 0x400;
+      /* ...Finally add the column and row. */
+      address += col;
+      address += (row * 40);
       reverse = mem->ram[address] >> 7;
       charset = (mem->vic2_mp >> 1) & 1;
 

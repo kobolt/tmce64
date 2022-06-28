@@ -6,6 +6,7 @@
 #include <time.h>
 
 #include "mem.h"
+#include "cia.h"
 #include "debugger.h"
 
 
@@ -264,6 +265,37 @@ void mem_ram_dump(FILE *fh, mem_t *mem, uint16_t start, uint16_t end)
   mem_ram_dump_16(fh, mem, start, end);
   for (i = (start & 0xFFF0) + 16; i <= end; i += 16) {
     mem_ram_dump_16(fh, mem, i, end);
+  }
+}
+
+
+
+void mem_vic2_dump(FILE *fh, mem_t *mem)
+{
+  int i;
+
+  fprintf(fh, "Memory Pointers: 0x%02x\n", mem->vic2_mp);
+  fprintf(fh, "  Screen Memory: 0x%04x\n",
+    (((mem->vic2_mp >> 4) & 0xF) * 0x400) +
+    ((~(((cia_t *)mem->cia2)->data_port_a) & 0x3) * 0x4000));
+  fprintf(fh, "  Character Set: 0x%04x\n",
+    (((mem->vic2_mp >> 1) & 0x7) * 0x800) +
+    ((~(((cia_t *)mem->cia2)->data_port_a) & 0x3) * 0x4000));
+
+  fprintf(fh, "Background Color 0: 0x%02x\n", mem->vic2_bg0);
+
+  fprintf(fh, "Color RAM:\n");
+  for (i = 0; i < 1024; i++) {
+    if (i % 16 == 0) {
+      fprintf(fh, "$%04x   ", i);
+    }
+    fprintf(fh, "%02x ", mem->color_ram[i]);
+    if (i % 4 == 3) {
+      fprintf(fh, " ");
+    }
+    if (i % 16 == 15) {
+      fprintf(fh, "\n");
+    }
   }
 }
 

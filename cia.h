@@ -19,6 +19,10 @@ typedef struct cia_s {
   cia_timer_t timer_b;
   void *cpu;
   void *mem;
+  uint8_t data_port_a;
+  uint8_t data_port_b;
+  uint8_t data_dir_a;
+  uint8_t data_dir_b;
 } cia_t;
 
 #define CIA_PRA       0x0 /* Data Port A */

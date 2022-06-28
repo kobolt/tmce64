@@ -7,6 +7,7 @@
 #include "mos6510.h"
 #include "mem.h"
 #include "panic.h"
+#include "debugger.h"
 
 
 
@@ -887,6 +888,7 @@ static void op_jmp_absi(mos6510_t *cpu, mem_t *mem)
 static void op_jsr(mos6510_t *cpu, mem_t *mem)
 {
   OP_PROLOGUE_ABS
+  debugger_stack_trace_add(cpu->pc - 3, absolute);
   mem_write(mem, MEM_PAGE_STACK + cpu->sp--, (cpu->pc - 1) / 256);
   mem_write(mem, MEM_PAGE_STACK + cpu->sp--, (cpu->pc - 1) % 256);
   cpu->pc = absolute;
@@ -1343,6 +1345,7 @@ static void op_rti(mos6510_t *cpu, mem_t *mem)
 
 static void op_rts(mos6510_t *cpu, mem_t *mem)
 {
+  debugger_stack_trace_rem();
   cpu->pc  = mem_read(mem, MEM_PAGE_STACK + (++cpu->sp));
   cpu->pc += mem_read(mem, MEM_PAGE_STACK + (++cpu->sp)) * 256;
   cpu->pc += 1;
@@ -1639,6 +1642,7 @@ void mos6510_execute(mos6510_t *cpu, mem_t *mem)
   uint8_t opcode;
   opcode = mem_read(mem, cpu->pc++);
   (opcode_function[opcode])(cpu, mem);
+  debugger_mem_execute(cpu->pc);
 }
 
 

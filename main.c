@@ -14,6 +14,8 @@
 #include "mos6510_trace.h"
 #include "mem.h"
 #include "cia.h"
+#include "serial_bus.h"
+#include "disk.h"
 #include "panic.h"
 #include "console.h"
 #include "debugger.h"
@@ -32,6 +34,7 @@ static mos6510_t cpu;
 static mem_t mem;
 static cia_t cia1;
 static cia_t cia2;
+static serial_bus_t bus;
 
 bool debugger_break = false;
 bool warp_mode = false;
@@ -71,12 +74,13 @@ static void display_help(const char *progname)
 {
   fprintf(stdout, "Usage: %s <options> [prg]\n", progname);
   fprintf(stdout, "Options:\n"
-     "  -h       Display this help.\n"
-     "  -b       Break into debugger on start.\n"
-     "  -w       Warp mode, disable real C64 speed emulation.\n"
-     "  -r DIR   Load ROM file from DIR instead of default location.\n"
-     "  -l       Run Lorenz CPU test.\n"
-     "  -d       Run Dormann CPU test.\n"
+     "  -h        Display this help.\n"
+     "  -b        Break into debugger on start.\n"
+     "  -w        Warp mode, disable real C64 speed emulation.\n"
+     "  -8 FILE   Load D64 FILE into disk drive device #8.\n"
+     "  -r DIR    Load ROM file from DIR instead of default location.\n"
+     "  -l        Run Lorenz CPU test.\n"
+     "  -d        Run Dormann CPU test.\n"
      "\n");
   fprintf(stdout,
     "Specify a PRG file to load it automatically on start.\n"
@@ -92,10 +96,11 @@ int main(int argc, char *argv[])
   bool dormann_test = false;
   bool lorenz_test = false;
   char *rom_directory = NULL;
+  char *d64_filename = NULL;
   char rom_path[PATH_MAX];
   int cycle = 0;
 
-  while ((c = getopt(argc, argv, "hbdlr:w")) != -1) {
+  while ((c = getopt(argc, argv, "hbdlr:w8:")) != -1) {
     switch (c) {
     case 'h':
       display_help(argv[0]);
@@ -121,6 +126,10 @@ int main(int argc, char *argv[])
       warp_mode = true;
       break;
 
+    case '8':
+      d64_filename = optarg;
+      break;
+
     case '?':
     default:
       display_help(argv[0]);
@@ -129,11 +138,14 @@ int main(int argc, char *argv[])
   }
 
   mos6510_trace_init();
+  debugger_stack_trace_init();
   panic_msg[0] = '\0';
 
   mem_init(&mem);
   cia_init(&cia1, 1);
   cia_init(&cia2, 2);
+  serial_bus_init(&bus);
+  disk_init();
 
   /* Lorenz test mode: */
   if (lorenz_test) {
@@ -195,6 +207,15 @@ int main(int argc, char *argv[])
     pending_prg = argv[optind];
   }
 
+  /* Load D64 file if specified. */
+  if (d64_filename != NULL) {
+    if (disk_load_d64(8, d64_filename) != 0) {
+      console_exit();
+      fprintf(stdout, "Loading of D64 file '%s' failed!\n", d64_filename);
+      return EXIT_FAILURE;
+    }
+  }
+
   /* Setup timer to relax CPU. */
   if (! warp_mode) {
     struct itimerval new;
@@ -211,6 +232,7 @@ int main(int argc, char *argv[])
     mos6510_execute(&cpu, &mem);
     cia_execute(&cia1);
     cia_execute(&cia2);
+    serial_bus_execute(&bus, &cia2.data_port_a);
     console_execute(&mem);
 
     if (debugger_break) {
@@ -219,7 +241,7 @@ int main(int argc, char *argv[])
         fprintf(stdout, "%s", panic_msg);
         panic_msg[0] = '\0';
       }
-      debugger_break = debugger(&cpu, &mem);
+      debugger_break = debugger(&cpu, &mem, &bus);
       if (! debugger_break) {
         console_resume();
       }

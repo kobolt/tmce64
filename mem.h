@@ -32,5 +32,6 @@ void mem_write(mem_t *mem, uint16_t address, uint8_t value);
 int mem_load_rom(mem_t *mem, const char *filename, uint16_t address);
 int mem_load_prg(mem_t *mem, const char *filename);
 void mem_ram_dump(FILE *fh, mem_t *mem, uint16_t start, uint16_t end);
+void mem_vic2_dump(FILE *fh, mem_t *mem);
 
 #endif /* _MEM_H */

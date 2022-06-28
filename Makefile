@@ -2,7 +2,7 @@ CFLAGS=-Wall -Wextra -lncurses
 
 all: tmce64
 
-tmce64: main.o mos6510.o mos6510_trace.o mem.o cia.o console.o debugger.o lorenz.o dormann.o
+tmce64: main.o mos6510.o mos6510_trace.o mem.o cia.o serial_bus.o disk.o console.o debugger.o lorenz.o dormann.o
 	gcc -o tmce64 $^ ${CFLAGS}
 
 main.o: main.c
@@ -18,6 +18,12 @@ mem.o: mem.c
 	gcc -c $^ ${CFLAGS}
 
 cia.o: cia.c
+	gcc -c $^ ${CFLAGS}
+
+serial_bus.o: serial_bus.c
+	gcc -c $^ ${CFLAGS}
+
+disk.o: disk.c
 	gcc -c $^ ${CFLAGS}
 
 console.o: console.c
