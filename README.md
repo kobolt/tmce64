@@ -18,3 +18,12 @@ Some features:
 Screenshot:  
 ![Commodore 64 BASIC](tmce64-basic.png)
 
+Information on my blog:
+* [Terminal Mode Commodore 64 Emulator](https://kobolt.github.io/article-177.html)
+* [Terminal Mode Commodore 64 Emulator Update](https://kobolt.github.io/article-195.html)
+* [Terminal Mode Commodore 64 Emulator Disk Support](https://kobolt.github.io/article-199.html)
+
+YouTube videos:
+* [Commodore 64 Rolling Demo](https://www.youtube.com/watch?v=o3XeKIJRKow)
+* [Attack of the PETSCII Robots](https://www.youtube.com/watch?v=_gk-gmeht_M)
+
