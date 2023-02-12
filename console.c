@@ -10,10 +10,13 @@
 
 #include "mem.h"
 #include "cia.h"
+#include "vic.h"
 #include "panic.h"
 
-/* Using colors from the default rxvt color palette. */
-int color_map[16] = {
+
+
+/* Using colors from the default xterm/rxvt 256 color palette. */
+static int color_map[16] = {
    0, /*  0 = Black       */
   15, /*  1 = White       */
  124, /*  2 = Red         */
@@ -128,7 +131,7 @@ void console_init(void)
 
 
 
-void console_execute(mem_t *mem)
+void console_execute(mem_t *mem, vic_t *vic)
 {
   static int cycle = 0;
   int row, col;
@@ -151,16 +154,16 @@ void console_execute(mem_t *mem)
       /* Start with the VIC-II bank selection... */
       address = ((~(((cia_t *)mem->cia2)->data_port_a) & 0x3) * 0x4000);
       /* ...Then add the screen memory area offset... */
-      address += ((mem->vic2_mp >> 4) & 0xF) * 0x400;
+      address += ((vic->mp >> 4) & 0xF) * 0x400;
       /* ...Finally add the column and row. */
       address += col;
       address += (row * 40);
       reverse = mem->ram[address] >> 7;
-      charset = (mem->vic2_mp >> 1) & 1;
+      charset = (vic->mp >> 1) & 1;
 
       if (has_colors() && can_change_color()) {
-        color_pair = (mem->vic2_bg0 * 16) + 
-          (mem->color_ram[col + (row * 40)] & 0xF) + 1;
+        color_pair = (vic->bg0 * 16) + 
+          (vic->color_ram[col + (row * 40)] & 0xF) + 1;
         attron(COLOR_PAIR(color_pair));
       }
 
@@ -183,6 +186,38 @@ void console_execute(mem_t *mem)
       }
     }
   }
+#ifdef CONSOLE_EXTRA_INFO
+  /* CPU */
+  attron(A_BOLD);
+  mvprintw(26,  1, "/// 6510 ///");
+  attroff(A_BOLD);
+  mvprintw(27,  1, "PC:%04x", console_extra_info.pc);
+  mvprintw(27, 10, "SR:");
+  mvprintw(27, 13, "%c", (console_extra_info.sr_n) ? 'N' : '.');
+  mvprintw(27, 14, "%c", (console_extra_info.sr_v) ? 'V' : '.');
+  mvprintw(27, 15, "-");
+  mvprintw(27, 16, "%c", (console_extra_info.sr_b) ? 'B' : '.');
+  mvprintw(27, 17, "%c", (console_extra_info.sr_d) ? 'D' : '.');
+  mvprintw(27, 18, "%c", (console_extra_info.sr_i) ? 'I' : '.');
+  mvprintw(27, 19, "%c", (console_extra_info.sr_z) ? 'Z' : '.');
+  mvprintw(27, 20, "%c", (console_extra_info.sr_c) ? 'C' : '.');
+  mvprintw(28,  1, "A:%02x", console_extra_info.a);
+  mvprintw(28,  7, "X:%02x", console_extra_info.x);
+  mvprintw(28, 13, "Y:%02X", console_extra_info.y);
+  mvprintw(28, 19, "SP:%02x", console_extra_info.sp);
+
+  /* SID */
+  attron(A_BOLD);
+  mvprintw(30, 1, "/// 6581 ///");
+  attroff(A_BOLD);
+  for (int i = 0; i < 32; i += 8) {
+    mvprintw(31 + (i / 8), 1, "$D4%02x", i);
+    for (int j = 0; j < 8; j++) {
+      mvprintw(31 + (i / 8), 8 + (j * 3), "%02x",
+        console_extra_info.sid[i + j]);
+    }
+  }
+#endif
   /* $00D3 = Current cursor column. */
   /* $00D6 = Current cursor row. */
   move(mem->ram[0xD6], mem->ram[0xD3]);
@@ -346,12 +381,8 @@ void console_execute(mem_t *mem)
     default:
       if (c <= UINT8_MAX) {
         petscii = key_to_petscii[c];
-        if (petscii == 0) {
-          panic("Unmapped input code: %d\n", c);
-        }
       } else {
-        panic("Unhandled input code: %d\n", c);
-        petscii = 0;
+        petscii = 0; /* Unhandled input code */
       }
       break;
     }

@@ -11,14 +11,36 @@ typedef void (*mem_write_hook_t)(void *, uint16_t, uint8_t);
 typedef struct mem_s {
   uint8_t ram[UINT16_MAX + 1];
   uint8_t rom[UINT16_MAX + 1];
-  uint8_t color_ram[1024];
-  uint8_t vic2_bg0;
-  uint8_t vic2_mp;
-  mem_read_hook_t  cia_read;
-  mem_write_hook_t cia_write;
   void *cia1;
   void *cia2;
+  void *vic;
+  mem_read_hook_t  cia_read;
+  mem_write_hook_t cia_write;
+  mem_read_hook_t  vic_read;
+  mem_write_hook_t vic_write;
+  mem_read_hook_t  sid_read;
+  mem_write_hook_t sid_write;
 } mem_t;
+
+#ifdef CONSOLE_EXTRA_INFO
+typedef struct console_extra_info_s {
+  uint16_t pc;
+  uint8_t a;
+  uint8_t x;
+  uint8_t y;
+  uint16_t sp;
+  uint8_t sr_n;
+  uint8_t sr_v;
+  uint8_t sr_b;
+  uint8_t sr_d;
+  uint8_t sr_i;
+  uint8_t sr_z;
+  uint8_t sr_c;
+  uint8_t sid[32];
+} console_extra_info_t;
+
+extern console_extra_info_t console_extra_info;
+#endif
 
 #define MEM_PAGE_STACK 0x100
 
@@ -32,6 +54,5 @@ void mem_write(mem_t *mem, uint16_t address, uint8_t value);
 int mem_load_rom(mem_t *mem, const char *filename, uint16_t address);
 int mem_load_prg(mem_t *mem, const char *filename);
 void mem_ram_dump(FILE *fh, mem_t *mem, uint16_t start, uint16_t end);
-void mem_vic2_dump(FILE *fh, mem_t *mem);
 
 #endif /* _MEM_H */

@@ -7,6 +7,8 @@
 #include "mos6510.h"
 #include "mem.h"
 
+#define TRAP_OPCODE 0x02
+
 
 
 static void dormann_test_load(mem_t *mem, const char *filename)
@@ -37,7 +39,7 @@ static bool dormann_test_opcode_handler(uint32_t opcode,
   (void)mem;
 
   switch (opcode) {
-  case 0xFF: /* TRP - Trap! */
+  case TRAP_OPCODE:
     switch (cpu->pc-1) {
     case 0x3469: /* Test success */
       fprintf(stderr, "Test completed successfully.\n");
@@ -64,8 +66,8 @@ void dormann_test_setup(mos6510_t *cpu, mem_t *mem)
   mem->ram[1] = 0x0; /* Disable bank switching. */
   cpu->pc = 0x0400;
 
-  mem->ram[0x3469] = 0xFF; /* Inject trap code on end of test. */
-  mos6510_trap_opcode(0xFF, dormann_test_opcode_handler);
+  mem->ram[0x3469] = TRAP_OPCODE; /* Inject trap code on end of test. */
+  mos6510_trap_opcode(TRAP_OPCODE, dormann_test_opcode_handler);
 }
 
 

@@ -22,6 +22,7 @@ typedef struct mos6510_s {
   uint8_t y;           /* Y Register */
   uint8_t sp;          /* Stack Pointer */
   mos6510_status_t sr; /* Status Register */
+  uint8_t cycles;      /* Internal Cycle Counter */
 } mos6510_t;
 
 typedef bool (*mos6510_opcode_handler_t)(uint32_t, mos6510_t *, mem_t *);

@@ -8,6 +8,8 @@
 #include "mos6510.h"
 #include "mem.h"
 
+#define TRAP_OPCODE 0x02
+
 
 
 static uint8_t petscii_to_ascii[UINT8_MAX + 1] = {
@@ -70,7 +72,7 @@ static bool lorenz_test_opcode_handler(uint32_t opcode,
   uint16_t absolute;
 
   switch (opcode) {
-  case 0xFF: /* TRP - Trap! */
+  case TRAP_OPCODE:
     switch (cpu->pc-1) {
     case 0xFFD2: /* Print character */
       mem_write(mem, 0x030C, 0);
@@ -126,7 +128,7 @@ static bool lorenz_test_opcode_handler(uint32_t opcode,
 void lorenz_test_setup(mos6510_t *cpu, mem_t *mem)
 { 
   /* Inject trap opcode */
-  mos6510_trap_opcode(0xFF, lorenz_test_opcode_handler);
+  mos6510_trap_opcode(TRAP_OPCODE, lorenz_test_opcode_handler);
   
   /* Disable bank switching */
   mem->ram[1] = 0x0;
@@ -162,11 +164,11 @@ void lorenz_test_setup(mos6510_t *cpu, mem_t *mem)
   mem->ram[0xFF5A] = 0x03;
   
   /* Trap instructions */
-  mem->ram[0xFFD2] = 0xFF;
-  mem->ram[0xE16F] = 0xFF;
-  mem->ram[0xFFE4] = 0xFF;
-  mem->ram[0x8000] = 0xFF;
-  mem->ram[0xA474] = 0xFF;
+  mem->ram[0xFFD2] = TRAP_OPCODE;
+  mem->ram[0xE16F] = TRAP_OPCODE;
+  mem->ram[0xFFE4] = TRAP_OPCODE;
+  mem->ram[0x8000] = TRAP_OPCODE;
+  mem->ram[0xA474] = TRAP_OPCODE;
   
   /* Load initial test */
   lorenz_test_load(mem, " start");

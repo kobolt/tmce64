@@ -14,16 +14,21 @@
 #include "mos6510_trace.h"
 #include "mem.h"
 #include "cia.h"
+#include "vic.h"
 #include "serial_bus.h"
 #include "disk.h"
 #include "panic.h"
 #include "console.h"
+#include "joystick.h"
 #include "debugger.h"
 #include "test.h"
+#ifdef RESID
+#include "resid.h"
+#endif
 
 
 
-#define DEFAULT_ROM_DIRECTORY "/usr/lib64/vice/C64/"
+#define DEFAULT_ROM_DIRECTORY "/usr/share/vice/C64/"
 #define KERNAL_ROM "kernal"
 #define BASIC_ROM "basic"
 #define CHAR_ROM "chargen"
@@ -34,6 +39,7 @@ static mos6510_t cpu;
 static mem_t mem;
 static cia_t cia1;
 static cia_t cia2;
+static vic_t vic;
 static serial_bus_t bus;
 
 bool debugger_break = false;
@@ -98,7 +104,7 @@ int main(int argc, char *argv[])
   char *rom_directory = NULL;
   char *d64_filename = NULL;
   char rom_path[PATH_MAX];
-  int cycle = 0;
+  int sync_cycle = 0;
 
   while ((c = getopt(argc, argv, "hbdlr:w8:")) != -1) {
     switch (c) {
@@ -144,6 +150,7 @@ int main(int argc, char *argv[])
   mem_init(&mem);
   cia_init(&cia1, 1);
   cia_init(&cia2, 2);
+  vic_init(&vic);
   serial_bus_init(&bus);
   disk_init();
 
@@ -198,6 +205,23 @@ int main(int argc, char *argv[])
   cia2.cpu = &cpu;
   cia2.mem = &mem;
 
+  /* Setup VIC-II connections: */
+  mem.vic_read = vic_read_hook;
+  mem.vic_write = vic_write_hook;
+  mem.vic = &vic;
+  vic.cpu = &cpu;
+  vic.mem = &mem;
+
+#ifdef RESID
+  /* Setup reSID. */
+  mem.sid_read = resid_read_hook;
+  mem.sid_write = resid_write_hook;
+  if (resid_init() != 0) {
+    return EXIT_FAILURE;
+  }
+#endif
+  joystick_init();
+
   mos6510_reset(&cpu, &mem);
   console_init();
   signal(SIGINT, sig_handler);
@@ -217,25 +241,49 @@ int main(int argc, char *argv[])
   }
 
   /* Setup timer to relax CPU. */
-  if (! warp_mode) {
-    struct itimerval new;
-    new.it_value.tv_sec = 0;
-    new.it_value.tv_usec = 10000;
-    new.it_interval.tv_sec = 0;
-    new.it_interval.tv_usec = 10000;
-    signal(SIGALRM, sig_handler);
-    setitimer(ITIMER_REAL, &new, NULL);
-  }
+  struct itimerval new;
+  new.it_value.tv_sec = 0;
+  new.it_value.tv_usec = 10000;
+  new.it_interval.tv_sec = 0;
+  new.it_interval.tv_usec = 10000;
+  signal(SIGALRM, sig_handler);
+  setitimer(ITIMER_REAL, &new, NULL);
 
   while (1) {
     mos6510_trace_add(&cpu, &mem);
     mos6510_execute(&cpu, &mem);
-    cia_execute(&cia1);
-    cia_execute(&cia2);
+    sync_cycle += cpu.cycles;
+#ifdef RESID
+    resid_execute(cpu.cycles, warp_mode);
+#endif
+    while (cpu.cycles > 0) { /* Run once for each CPU clock. */
+      cia_execute(&cia1);
+      cia_execute(&cia2);
+      vic_execute(&vic);
+      cpu.cycles--;
+    }
     serial_bus_execute(&bus, &cia2.data_port_a);
-    console_execute(&mem);
+#ifdef CONSOLE_EXTRA_INFO
+    console_extra_info.pc = cpu.pc;
+    console_extra_info.a = cpu.a;
+    console_extra_info.x = cpu.x;
+    console_extra_info.y = cpu.y;
+    console_extra_info.sp = cpu.sp;
+    console_extra_info.sr_n = cpu.sr.n;
+    console_extra_info.sr_v = cpu.sr.v;
+    console_extra_info.sr_b = cpu.sr.b;
+    console_extra_info.sr_d = cpu.sr.d;
+    console_extra_info.sr_i = cpu.sr.i;
+    console_extra_info.sr_z = cpu.sr.z;
+    console_extra_info.sr_c = cpu.sr.c;
+#endif
+    console_execute(&mem, &vic);
+    joystick_execute();
 
     if (debugger_break) {
+#ifdef RESID
+      resid_pause();
+#endif
       console_pause();
       if (panic_msg[0] != '\0') {
         fprintf(stdout, "%s", panic_msg);
@@ -243,13 +291,15 @@ int main(int argc, char *argv[])
       }
       debugger_break = debugger(&cpu, &mem, &bus);
       if (! debugger_break) {
+#ifdef RESID
+        resid_resume();
+#endif
         console_resume();
       }
     }
 
-    cycle++;
     if (pending_prg != NULL) {
-      if (cycle > 600000) {
+      if (cpu.pc == 0xE5D4) { /* KERNAL should now be ready for commands. */
         if (mem_load_prg(&mem, pending_prg) != 0) {
           console_exit();
           fprintf(stdout, "Loading of PRG '%s' failed!\n", pending_prg);
@@ -266,10 +316,15 @@ int main(int argc, char *argv[])
 
         pending_prg = NULL;
       }
+    }
 
-    } else if (! warp_mode) {
-      if (cycle > 3000) { /* Tuned to approximately real C64 speed. */
-        cycle = 0;
+    if (! warp_mode) {
+#ifdef RESID
+      if (sync_cycle > resid_sync()) { /* Let reSID control the speed. */
+#else
+      if (sync_cycle > 9852) { /* Tuned to approximately PAL C64 speed. */
+#endif
+        sync_cycle = 0;
         pause(); /* Wait for SIGALRM. */
       }
     }

@@ -8,6 +8,7 @@
 #include "mos6510_trace.h"
 #include "mem.h"
 #include "cia.h"
+#include "vic.h"
 #include "serial_bus.h"
 #include "disk.h"
 #include "panic.h"
@@ -116,6 +117,7 @@ static void debugger_help(void)
   fprintf(stdout, "  k              - Dump Stack\n");
   fprintf(stdout, "  p              - Dump Program Area\n");
   fprintf(stdout, "  d <addr> [end] - Dump Memory\n");
+  fprintf(stdout, "  m <addr> <val> - Modify Memory\n");
   fprintf(stdout, "  bp             - Breakpoint Print\n");
   fprintf(stdout, "  br <addr>      - Breakpoint on Memory Read\n");
   fprintf(stdout, "  bw <addr>      - Breakpoint on Memory Write\n");
@@ -157,6 +159,9 @@ bool debugger(mos6510_t *cpu, mem_t *mem, serial_bus_t *serial_bus)
     fprintf(stdout, "%04x> ", cpu->pc);
 
     if (fgets(input, sizeof(input), stdin) == NULL) {
+      if (feof(stdin)) {
+        exit(EXIT_SUCCESS);
+      }
       continue;
     }
 
@@ -231,6 +236,15 @@ bool debugger(mos6510_t *cpu, mem_t *mem, serial_bus_t *serial_bus)
         fprintf(stdout, "Missing argument!\n");
       }
 
+    } else if (strncmp(argv[0], "m", 1) == 0) {
+      if (argc >= 3) {
+        sscanf(argv[1], "%4x", &value1);
+        sscanf(argv[2], "%2x", &value2);
+        mem->ram[value1 & 0xFFFF] = value2 & 0xFF;
+      } else {
+        fprintf(stdout, "Missing argument!\n");
+      }
+
     } else if (strncmp(argv[0], "bp", 2) == 0) {
       fprintf(stdout, "Breakpoints:\n");
       debugger_breakpoint_list();
@@ -292,7 +306,7 @@ bool debugger(mos6510_t *cpu, mem_t *mem, serial_bus_t *serial_bus)
 
     } else if (strncmp(argv[0], "v", 1) == 0) {
       fprintf(stdout, "VIC-II Dump:\n");
-      mem_vic2_dump(stdout, mem);
+      vic_dump(stdout, (vic_t *)mem->vic, (cia_t *)mem->cia2);
 
     } else if (strncmp(argv[0], "e", 1) == 0) {
       fprintf(stdout, "Serial Bus Dump:\n");

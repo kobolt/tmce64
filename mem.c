@@ -6,8 +6,12 @@
 #include <time.h>
 
 #include "mem.h"
-#include "cia.h"
+#include "vic.h"
 #include "debugger.h"
+
+#ifdef CONSOLE_EXTRA_INFO
+console_extra_info_t console_extra_info;
+#endif
 
 
 
@@ -30,16 +34,18 @@ static uint8_t io_read(mem_t *mem, uint16_t address)
     }
 
   } else if (address >= 0xD800) { /* Color RAM */
-    return mem->color_ram[address - 0xD800];
+    if (mem->vic != NULL) {
+      return ((vic_t *)mem->vic)->color_ram[address - 0xD800];
+    }
 
   } else if (address >= 0xD400) { /* SID */
-    /* Not implemented. */
+    if (mem->sid_read != NULL) {
+      return (mem->sid_read)(NULL, address);
+    }
 
   } else if (address >= 0xD000) { /* VIC-II */
-    if (address == 0xD021) { /* Background colour 0 */
-      return mem->vic2_bg0;
-    } else if (address == 0xD018) { /* Memory pointers */
-      return mem->vic2_mp;
+    if (mem->vic != NULL && mem->vic_read != NULL) {
+      return (mem->vic_read)(mem->vic, address);
     }
   }
   return 0;
@@ -66,16 +72,21 @@ static void io_write(mem_t *mem, uint16_t address, uint8_t value)
     }
 
   } else if (address >= 0xD800) { /* Color RAM */
-    mem->color_ram[address - 0xD800] = value;
+    if (mem->vic != NULL) {
+      ((vic_t *)mem->vic)->color_ram[address - 0xD800] = value;
+    }
 
   } else if (address >= 0xD400) { /* SID */
-    /* Not implemented. */
+#ifdef CONSOLE_EXTRA_INFO
+    console_extra_info.sid[address & 0x1F] = value;
+#endif
+    if (mem->sid_write != NULL) {
+      (mem->sid_write)(NULL, address, value);
+    }
 
   } else if (address >= 0xD000) { /* VIC-II */
-    if (address == 0xD021) { /* Background colour 0 */
-      mem->vic2_bg0 = value;
-    } else if (address == 0xD018) { /* Memory pointers */
-      mem->vic2_mp = value;
+    if (mem->vic != NULL && mem->vic_write != NULL) {
+      (mem->vic_write)(mem->vic, address, value);
     }
   }
 }
@@ -93,19 +104,21 @@ void mem_init(mem_t *mem)
   for (i = 0; i <= UINT16_MAX; i++) {
     mem->rom[i] = 0xff;
   }
-  for (i = 0; i < 1024; i++) {
-    mem->color_ram[i] = 0xff;
-  }
-
-  /* Internal VIC-II registers. */
-  mem->vic2_bg0 = 0;
-  mem->vic2_mp = 0;
 
   /* CIA connection. */
   mem->cia_read = NULL;
   mem->cia_write = NULL;
   mem->cia1 = NULL;
   mem->cia2 = NULL;
+
+  /* VIC-II connection. */
+  mem->vic_read = NULL;
+  mem->vic_write = NULL;
+  mem->vic = NULL;
+
+  /* SID connection. */
+  mem->sid_read = NULL;
+  mem->sid_write = NULL;
 
   /* Setup I/O registers in the zero page to default. */
   mem->ram[0] = 0b00000000; /* All inputs! */
@@ -132,7 +145,7 @@ uint8_t mem_read(mem_t *mem, uint16_t address)
       }
     }
   }
-  if (address >= 0xE000 && address < 0xFFFF) {
+  if (address >= 0xE000 /* && address <= 0xFFFF */) {
     if (mem->ram[1] & MEM_HIRAM) {
       return mem->rom[address]; /* KERNAL ROM */
     }
@@ -265,37 +278,6 @@ void mem_ram_dump(FILE *fh, mem_t *mem, uint16_t start, uint16_t end)
   mem_ram_dump_16(fh, mem, start, end);
   for (i = (start & 0xFFF0) + 16; i <= end; i += 16) {
     mem_ram_dump_16(fh, mem, i, end);
-  }
-}
-
-
-
-void mem_vic2_dump(FILE *fh, mem_t *mem)
-{
-  int i;
-
-  fprintf(fh, "Memory Pointers: 0x%02x\n", mem->vic2_mp);
-  fprintf(fh, "  Screen Memory: 0x%04x\n",
-    (((mem->vic2_mp >> 4) & 0xF) * 0x400) +
-    ((~(((cia_t *)mem->cia2)->data_port_a) & 0x3) * 0x4000));
-  fprintf(fh, "  Character Set: 0x%04x\n",
-    (((mem->vic2_mp >> 1) & 0x7) * 0x800) +
-    ((~(((cia_t *)mem->cia2)->data_port_a) & 0x3) * 0x4000));
-
-  fprintf(fh, "Background Color 0: 0x%02x\n", mem->vic2_bg0);
-
-  fprintf(fh, "Color RAM:\n");
-  for (i = 0; i < 1024; i++) {
-    if (i % 16 == 0) {
-      fprintf(fh, "$%04x   ", i);
-    }
-    fprintf(fh, "%02x ", mem->color_ram[i]);
-    if (i % 4 == 3) {
-      fprintf(fh, " ");
-    }
-    if (i % 16 == 15) {
-      fprintf(fh, "\n");
-    }
   }
 }
 

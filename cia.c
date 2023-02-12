@@ -6,6 +6,7 @@
 
 #include "cia.h"
 #include "mos6510.h"
+#include "joystick.h"
 
 
 
@@ -24,10 +25,19 @@ uint8_t cia_read_hook(void *cia, uint16_t address)
 
   switch (address & 0xF) {
   case CIA_PRA:
-    return ((cia_t *)cia)->data_port_a;
+    if (((cia_t *)cia)->no == 1) {
+      return ((cia_t *)cia)->data_port_a & joystick_port_2_get();
+    } else {
+      return ((cia_t *)cia)->data_port_a;
+    }
 
   case CIA_PRB:
-    return ((cia_t *)cia)->data_port_b;
+    if (((cia_t *)cia)->no == 1) {
+      /* Return 0xFF to indicate that nothing in keyboard matrix row is set. */
+      return 0xFF & joystick_port_1_get();
+    } else {
+      return ((cia_t *)cia)->data_port_b;
+    }
 
   case CIA_DDRA:
     return ((cia_t *)cia)->data_dir_a;
@@ -172,14 +182,14 @@ void cia_init(cia_t *cia, int cia_no)
   cia->data_port_b = 0x0;
   cia->data_dir_a = 0x0;
   cia->data_dir_b = 0x0;
+  cia->cpu = NULL;
+  cia->mem = NULL;
 }
 
 
 
 void cia_execute(cia_t *cia)
 {
-  /* NOTE: Both timers just run at the system/CPU clock. */
-
   if (cia->timer_a.control & 0x10) { /* Timer A Force Load */
     cia->timer_a.counter = cia->timer_a.latch;
     cia->timer_a.control &= ~0x10;
