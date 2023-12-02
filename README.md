@@ -38,4 +38,5 @@ YouTube videos:
 * [Future Composer 2.0 Intro](https://www.youtube.com/shorts/u5-h6eYAdSM)
 * [In Full Gear](https://www.youtube.com/shorts/0011a7Ipztk)
 * [Digiloi](https://www.youtube.com/shorts/vJPg_WGLFfQ)
+* [Advent of Code 2023, Day 1, Part 1](https://www.youtube.com/shorts/k1BgcMtu1Nw)
 
