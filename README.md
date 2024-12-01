@@ -39,4 +39,5 @@ YouTube videos:
 * [In Full Gear](https://www.youtube.com/shorts/0011a7Ipztk)
 * [Digiloi](https://www.youtube.com/shorts/vJPg_WGLFfQ)
 * [Advent of Code 2023, Day 1, Part 1](https://www.youtube.com/shorts/k1BgcMtu1Nw)
+* [Advent of Code 2024, Day 1, Part 1](https://www.youtube.com/shorts/FrFt0aeCes8)
 
