@@ -1,9 +1,7 @@
-# tmce64
-Terminal Mode Commodore 64 Emulator
-
+# Terminal Mode Commodore 64 Emulator
 This is an emulator to run Commodore 64 programs, especially those made in BASIC, in a Linux terminal.
 
-Features:
+## Features
 * 6510 CPU emulation passes [Dormann tests](https://github.com/Klaus2m5/6502_65C02_functional_tests) and some Lorenz tests.
 * Curses based UI with full 256-color support if available.
 * Approximate PETSCII to ASCII conversion, for both upper/lower case sets.
@@ -18,7 +16,7 @@ Features:
 * Can load PRG programs directly by injecting them into memory.
 * Needs the ROMs from the [VICE emulator](https://vice-emu.sourceforge.io/) or similar.
 
-Known issues and missing features:
+## Known issues and missing features
 * Sprites are not supported, so many games are probably completely unplayable.
 * Keyboard input only works through KERNAL routines since the CIA keyboard matrix is not fully emulated.
 * VIC-II versus CPU timings are off since the VIC cannot "stun" the CPU.
@@ -26,13 +24,21 @@ Known issues and missing features:
 * Only joystick in port 2 currently handled.
 * Accuracy in general... Lots of hit and miss with demos and games.
 
-Information on my blog:
+# Version history
+* 0.1 - Proof-of-concept prototype version.
+* 0.2 - Graphics support added.
+* 0.3 - Disk drive support added.
+* 0.4 - SID support added.
+* 0.5 - Unicode support added.
+
+## Information on my blog
 * [Terminal Mode Commodore 64 Emulator](https://kobolt.github.io/article-177.html)
 * [Terminal Mode Commodore 64 Emulator Update](https://kobolt.github.io/article-195.html)
 * [Terminal Mode Commodore 64 Emulator Disk Support](https://kobolt.github.io/article-199.html)
 * [Terminal Mode Commodore 64 Emulator SID Support](https://kobolt.github.io/article-212.html)
+* [Terminal Mode Commodore 64 Emulator Unicode Support](https://kobolt.github.io/article-274.html)
 
-YouTube videos:
+## YouTube videos
 * [Commodore 64 Rolling Demo](https://www.youtube.com/watch?v=o3XeKIJRKow)
 * [Attack of the PETSCII Robots](https://www.youtube.com/watch?v=_gk-gmeht_M)
 * [Future Composer 2.0 Intro](https://www.youtube.com/shorts/u5-h6eYAdSM)

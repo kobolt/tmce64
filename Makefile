@@ -4,13 +4,17 @@ RESID_INC_PATH=../resid/inc/
 
 OBJECTS=main.o mos6510.o mos6510_trace.o mem.o cia.o vic.o serial_bus.o disk.o console.o joystick.o debugger.o lorenz.o dormann.o
 CFLAGS=-Wall -Wextra
-LDFLAGS=-lncurses -lSDL2
+LDFLAGS=-lncursesw -lSDL2
 
 ifneq (,$(wildcard ${RESID_LIB_PATH}/libresid.a))
 # reSID found!
 CFLAGS+=-I${RESID_INC_PATH} -DRESID
 LDFLAGS+=-lresid -L${RESID_LIB_PATH} -lm -lstdc++
 OBJECTS+=resid.o
+endif
+
+ifeq ($(findstring UTF-8, $(LC_ALL)), UTF-8)
+CFLAGS+=-DUNICODE
 endif
 
 all: tmce64

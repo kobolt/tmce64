@@ -4,7 +4,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef UNICODE
+#define NCURSES_WIDECHAR 1
+#include <ncursesw/ncurses.h>
+#include <locale.h>
+#else
 #include <curses.h>
+#endif
 #include <unistd.h>
 #include <sys/time.h>
 
@@ -28,8 +34,8 @@ static int color_map[16] = {
  172, /*  8 = Orange      */
   94, /*  9 = Brown       */
  210, /* 10 = Light Red   */
- 234, /* 11 = Grey 1      */
- 240, /* 12 = Grey 2      */
+ 240, /* 11 = Grey 1      */
+ 244, /* 12 = Grey 2      */
  156, /* 13 = Light Green */
   63, /* 14 = Light Blue  */
  250, /* 15 = Grey 3      */
@@ -37,7 +43,46 @@ static int color_map[16] = {
 
 
 
-static uint8_t charset1_to_ascii[128] = {
+#ifdef UNICODE
+static wchar_t charset1_to_unicode[128] = {
+  '@',    'A',    'B',    'C',    'D',    'E',    'F',    'G',
+  'H',    'I',    'J',    'K',    'L',    'M',    'N',    'O',
+  'P',    'Q',    'R',    'S',    'T',    'U',    'V',    'W',
+  'X',    'Y',    'Z',    '[',    0x00A3, ']',    0x2191, 0x2190,
+  ' ',    '!',    '"',    '#',    '$',    '%',    '&',    '\'',
+  '(',    ')',    '*',    '+',    ',',    '-',    '.',    '/',
+  '0',    '1',    '2',    '3',    '4',    '5',    '6',    '7',
+  '8',    '9',    ':',    ';',    '<',    '=',    '>',    '?',
+  0x2501, 0x2660, 0x2503, 0x2501, 0x1FB77,0x1FB76,0x1FB7A,0x1FB71,
+  0x1FB74,0x256E, 0x2570, 0x256F, 0x1FB7C,0x2572, 0x2571, 0x1FB7D,
+  0x1FB7E,0x2022, 0x1FB7B,0x2665, 0x1FB70,0x256D, 0x2573, 0x25CB,
+  0x2663, 0x1FB75,0x2666, 0x254B, 0x1FB8C,0x2503, 0x03C0, 0x25E5,
+  ' ',    0x258C, 0x2584, 0x2594, 0x2581, 0x258E, 0x1FB90,0x1FB87,
+  0x1FB8F,0x25E4, 0x1FB87,0x2523, 0x2597, 0x2517, 0x2513, 0x2582,
+  0x250F, 0x253B, 0x2533, 0x252B, 0x258E, 0x258D, 0x1FB88,0x1FB82,
+  0x1FB83,0x2583, 0x1FB7F,0x2596, 0x259D, 0x251B, 0x2598, 0x259A,
+};
+
+static wchar_t charset2_to_unicode[128] = {
+  '@',    'a',    'b',    'c',    'd',    'e',    'f',    'g',
+  'h',    'i',    'j',    'k',    'l',    'm',    'n',    'o',
+  'p',    'q',    'r',    's',    't',    'u',    'v',    'w',
+  'x',    'y',    'z',    '[',    0x00A3, ']',    0x2191, 0x2190,
+  ' ',    '!',    '"',    '#',    '$',    '%',    '&',    '\'',
+  '(',    ')',    '*',    '+',    ',',    '-',    '.',    '/',
+  '0',    '1',    '2',    '3',    '4',    '5',    '6',    '7',
+  '8',    '9',    ':',    ';',    '<',    '=',    '>',    '?',
+  0x2501, 'A',    'B',    'C',    'D',    'E',    'F',    'G',
+  'H',    'I',    'J',    'K',    'L',    'M',    'N',    'O',
+  'P',    'Q',    'R',    'S',    'T',    'U',    'V',    'W',
+  'X',    'Y',    'Z',    0x254B, 0x1FB8C,0x2503, 0x1FB90,0x1FB98,
+  ' ',    0x258C, 0x2584, 0x2594, 0x2581, 0x258E, 0x1FB90,0x1FB87,
+  0x1FB8F,0x1FB99,0x1FB87,0x2523, 0x2597, 0x2517, 0x2513, 0x2582,
+  0x250F, 0x253B, 0x2533, 0x252B, 0x258E, 0x258D, 0x1FB88,0x1FB82,
+  0x1FB83,0x2583, 0x2713, 0x2596, 0x259D, 0x251B, 0x2598, 0x259A,
+};
+#else
+static const uint8_t charset1_to_ascii[128] = {
   '@','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O',
   'P','Q','R','S','T','U','V','W','X','Y','Z','[','&',']','^','<',
   ' ','!','"','#','$','%','&','\'','(',')','*','+',',','-','.','/',
@@ -48,7 +93,7 @@ static uint8_t charset1_to_ascii[128] = {
   '/','-','-','|','|','|','|','-','-','-','/','#','#','/','#','#',
 };
 
-static uint8_t charset2_to_ascii[128] = {
+static const uint8_t charset2_to_ascii[128] = {
   '@','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o',
   'p','q','r','s','t','u','v','w','x','y','z','[','&',']','^','<',
   ' ','!','"','#','$','%','&','\'','(',')','*','+',',','-','.','/',
@@ -58,6 +103,7 @@ static uint8_t charset2_to_ascii[128] = {
   ' ','#','#','-','_','|','#','|','#','/','|','|','#','\\','\\','_',
   '/','-','-','|','|','|','|','-','-','-','/','#','#','/','#','#',
 };
+#endif /* UNICODE */
 
 
 
@@ -111,6 +157,16 @@ void console_init(void)
   int fg, bg;
 
   initscr();
+#ifdef UNICODE
+  setlocale(LC_ALL, "en_US.UTF-8");
+#ifdef C64_TTF
+  for (int i = 0; i < 128; i++) {
+    /* Re-map to private Unicode space. */
+    charset1_to_unicode[i] = 0xEE00 + i;
+    charset2_to_unicode[i] = 0xEF00 + i;
+  }
+#endif /* C64_TTF */
+#endif /* UNICODE */
   atexit(console_exit);
   noecho();
   keypad(stdscr, TRUE);
@@ -137,6 +193,10 @@ void console_execute(mem_t *mem, vic_t *vic)
   int row, col;
   uint16_t address;
   uint8_t petscii;
+#ifdef UNICODE
+  attr_t attr;
+  cchar_t cchar;
+#endif /* UNICODE */
   uint8_t color_pair;
   bool reverse;
   bool charset;
@@ -161,6 +221,29 @@ void console_execute(mem_t *mem, vic_t *vic)
       reverse = mem->ram[address] >> 7;
       charset = (vic->mp >> 1) & 1;
 
+#ifdef UNICODE
+      if (has_colors() && can_change_color()) {
+        color_pair = (vic->bg0 * 16) + 
+          (vic->color_ram[col + (row * 40)] & 0xF) + 1;
+      } else {
+        color_pair = 0;
+      }
+
+      if (reverse) {
+        attr = A_REVERSE;
+      } else {
+        attr = 0;
+      }
+
+      if (charset) {
+        setcchar(&cchar, &charset2_to_unicode[mem->ram[address] & 0x7F],
+          attr, color_pair, NULL);
+      } else {
+        setcchar(&cchar, &charset1_to_unicode[mem->ram[address] & 0x7F],
+          attr, color_pair, NULL);
+      }
+      mvadd_wch(row, col, &cchar);
+#else
       if (has_colors() && can_change_color()) {
         color_pair = (vic->bg0 * 16) + 
           (vic->color_ram[col + (row * 40)] & 0xF) + 1;
@@ -184,6 +267,7 @@ void console_execute(mem_t *mem, vic_t *vic)
       if (has_colors() && can_change_color()) {
         attroff(COLOR_PAIR(color_pair));
       }
+#endif /* UNICODE */
     }
   }
 #ifdef CONSOLE_EXTRA_INFO
